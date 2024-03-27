@@ -13,7 +13,6 @@ TOKEN = os.getenv("TOKEN")
 
 
 
-
 def load_memory(file_path: str) -> dict:
     """
     Load memory from a JSON file.
@@ -109,14 +108,14 @@ async def teach_response(ctx) -> None:
     try:
         message = await bot.wait_for('message', timeout=60, check=check_message)
         if message.content.lower() == 'cancel':
-            await ctx.send("Teaching canceled.")
+            await ctx.send("OK, I get it, let me know when you are ready to make me a better person.")
             return
 
         question = message.content
         await ctx.send(f"Got it! What fun quirky thing should I say to '{question}'?")
         answer = await bot.wait_for('message', timeout=60, check=check_message)
         if answer.content.lower() == 'cancel':
-            await ctx.send("Teaching canceled.")
+            await ctx.send("OK, I get it, let me know when you are ready to make me a better person.")
             return
 
         responses = load_memory("responses.json")
@@ -124,7 +123,7 @@ async def teach_response(ctx) -> None:
         save_memory('responses.json', responses)
         await ctx.send("Thanks for teaching me!")
     except TimeoutError:
-        await ctx.send("Teaching timed out. Please try again.")
+        await ctx.send("Sorry I got bored, start from the beginning plz.")
 
 
 @bot.event
@@ -145,28 +144,26 @@ async def on_message(message) -> None:
         responses = load_memory("responses.json")
         match = find_match(message.content.lower(), [q['question'].lower() for q in responses['questions']])
         if match:
-            answer = collect_answer(match, responses)
-            if answer:
-                await message.channel.send(answer)
-            else:
-                await message.channel.send("I don't have an answer for that question yet.")
+            await message.channel.send(collect_answer(match,response))
+
 
         else:
+            question: str = message.content
             await message.channel.send("Heckin Uhhh, I'm not sure about that. Would you like to teach me a new trick? (Yes/No)")
             try:
                 response = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                 if response.content.lower() == 'yes':
-                    await message.channel.send("Sure! What do you want to teach me?")
-                    question = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
+                    # await message.channel.send("Sure! What do you want to teach me?")
+                    # question = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                     await message.channel.send("Got it! What's the quirky thing I say or do?")
                     answer = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
-                    responses['questions'].append({'question': question.content, 'answer': answer.content})
+                    responses['questions'].append({'question': question, 'answer': answer.content})
                     save_memory('responses.json', responses)
                     await message.channel.send("Thanks for teaching me!")
                 else:
                     await message.channel.send("Alright, let me know if you change your mind!")
             except asyncio.TimeoutError:
-                await message.channel.send("Teaching request timed out.")
+                await message.channel.send("Sorry I got bored, start from the beginning plz.")
 
 
 # Run the bot

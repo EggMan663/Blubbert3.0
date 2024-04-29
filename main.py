@@ -11,74 +11,77 @@ from difflib import get_close_matches
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
+def get_function(name):
+    if name == 'load':
+        def load_memory(file_path: str) -> dict:
+            """
+            Load memory from a JSON file.
 
+            Args:
+                file_path (str): Path to the JSON file.
 
-def load_memory(file_path: str) -> dict:
-    """
-    Load memory from a JSON file.
+            Returns:
+                dict: Loaded memory data.
+            """
+            with open(file_path, "r") as file:
+                memory: dict = json.load(file)
+            return memory
+        return load_memory
+    elif name == 'save':
+        def save_memory(file_path: str, memory: dict) -> None:
+            """
+            Save memory to a JSON file.
 
-    Args:
-        file_path (str): Path to the JSON file.
+            Args:
+                file_path (str): Path to the JSON file.
+                memory (dict): Memory data to be saved.
 
-    Returns:
-        dict: Loaded memory data.
-    """
-    with open(file_path, "r") as file:
-        memory: dict = json.load(file)
-    return memory
+            Returns:
+                None
+            """
+            with open(file_path, 'w') as file:
+                json.dump(memory, file, indent=2)
+        return save_memory
+    elif name == 'match':
+        def find_match(user_question: str, questions: list[str]) -> str:
+            """
+            Find a matching question from a list of questions.
 
+            Args:
+                user_question (str): User's question.
+                questions (list[str]): List of questions to search from.
 
-def save_memory(file_path: str, memory: dict) -> None:
-    """
-    Save memory to a JSON file.
+            Returns:
+                str: Matched question.
+            """
+            matches: list = get_close_matches(user_question, questions, n=1, cutoff=0.6)
+            return matches[0] if matches else None
+        return find_match
+    elif name == 'collect':
+        def collect_answer(question: str, responses_base: dict) -> str:
+            """
+            Collect an answer for a given question from memory.
 
-    Args:
-        file_path (str): Path to the JSON file.
-        memory (dict): Memory data to be saved.
+            Args:
+                question (str): Question to find answer for.
+                responses_base (dict): Dictionary containing questions and answers.
 
-    Returns:
-        None
-    """
-    with open(file_path, 'w') as file:
-        json.dump(memory, file, indent=2)
-
-
-def find_match(user_question: str, questions: list[str]) -> str:
-    """
-    Find a matching question from a list of questions.
-
-    Args:
-        user_question (str): User's question.
-        questions (list[str]): List of questions to search from.
-
-    Returns:
-        str: Matched question.
-    """
-    matches: list = get_close_matches(user_question, questions, n=1, cutoff=0.6)
-    return matches[0] if matches else None
-
-
-def collect_answer(question: str, responses_base: dict) -> str:
-    """
-    Collect an answer for a given question from memory.
-
-    Args:
-        question (str): Question to find answer for.
-        responses_base (dict): Dictionary containing questions and answers.
-
-    Returns:
-        str: Answer for the question.
-    """
-    for q in responses_base["questions"]:
-        if q['question'] == question:
-            return q["answer"]
-    return None  # Return None if no answer is found
-
+            Returns:
+                str: Answer for the question.
+            """
+            for q in responses_base["questions"]:
+                if q['question'] == question:
+                    return q["answer"]
+            return None  # Return None if no answer is found
+        return collect_answer
+    else:
+        print("Error, check function parameters.")
 
 # Initialize the Discord bot with command support
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+prefix = commands.Bot.user
+bot = commands.Bot(command_prefix=prefix, intents=intents)
 
 
 @bot.event
@@ -117,6 +120,9 @@ async def teach_response(ctx) -> None:
         if answer.content.lower() == 'cancel':
             await ctx.send("OK, I get it, let me know when you are ready to make me a better person.")
             return
+        
+        load_memory = get_function("load")
+        save_memory = get_function("save")
 
         responses = load_memory("responses.json")
         responses['questions'].append({'question': question, 'answer': answer.content})
@@ -125,6 +131,10 @@ async def teach_response(ctx) -> None:
     except TimeoutError:
         await ctx.send("Sorry I got bored, start from the beginning plz.")
 
+@bot.command(name='prefix')
+async def set_prefix(ctx):
+    prefix = ctx.message
+    return prefix
 
 @bot.event
 async def on_message(message) -> None:
@@ -140,21 +150,24 @@ async def on_message(message) -> None:
     if message.author == bot.user:
         return
 
-    if "blubbert".lower() in message.content.lower():
+    if "blubbert" in message.content.lower():
+        load_memory = get_function("load")
+        find_match = get_function("match")
+
         responses = load_memory("responses.json")
         match = find_match(message.content.lower(), [q['question'].lower() for q in responses['questions']])
         if match:
+            collect_answer = get_function("collect")
             await message.channel.send(collect_answer(match,response))
 
 
         else:
-            question: str = message.content
-            await message.channel.send("Heckin Uhhh, I'm not sure about that. Would you like to teach me a new trick? (Yes/No)")
+            question = message.content
+            await message.channel.send("Heckin Uhhh, I don't really know what you are talking about. Would you like to teach me a new trick? (Yes/No)")
             try:
                 response = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                 if response.content.lower() == 'yes':
-                    # await message.channel.send("Sure! What do you want to teach me?")
-                    # question = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
+                    save_memory = get_function("save")
                     await message.channel.send("Got it! What's the quirky thing I say or do?")
                     answer = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                     responses['questions'].append({'question': question, 'answer': answer.content})

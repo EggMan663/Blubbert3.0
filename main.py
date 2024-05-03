@@ -80,8 +80,7 @@ def get_function(name):
 # Initialize the Discord bot with command support
 intents = discord.Intents.default()
 intents.message_content = True
-prefix = commands.Bot.user
-bot = commands.Bot(command_prefix=prefix, intents=intents)
+bot = commands.Bot(command_prefix="b!", intents=intents)
 
 
 @bot.event
@@ -93,9 +92,9 @@ async def on_ready() -> None:
 
 
 @bot.command(name='teach')
-async def teach_response(ctx) -> None:
+async def teach(ctx) -> None:
     """
-    Teach the bot a new response using the !teach command.
+    Teach the bot a new response using the b!teach command.
 
     Args:
         ctx (discord.ext.commands.Context): Context object representing the context of the command.
@@ -131,11 +130,6 @@ async def teach_response(ctx) -> None:
     except TimeoutError:
         await ctx.send("Sorry I got bored, start from the beginning plz.")
 
-@bot.command(name='prefix')
-async def set_prefix(ctx):
-    prefix = ctx.message
-    return prefix
-
 @bot.event
 async def on_message(message) -> None:
     """
@@ -149,6 +143,8 @@ async def on_message(message) -> None:
     """
     if message.author == bot.user:
         return
+    
+    await bot.process_commands(message)
 
     if "blubbert" in message.content.lower():
         load_memory = get_function("load")
@@ -158,7 +154,7 @@ async def on_message(message) -> None:
         match = find_match(message.content.lower(), [q['question'].lower() for q in responses['questions']])
         if match:
             collect_answer = get_function("collect")
-            await message.channel.send(collect_answer(match,response))
+            await message.channel.send(collect_answer(match,responses))
 
 
         else:
@@ -167,7 +163,9 @@ async def on_message(message) -> None:
             try:
                 response = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                 if response.content.lower() == 'yes':
+
                     save_memory = get_function("save")
+                    
                     await message.channel.send("Got it! What's the quirky thing I say or do?")
                     answer = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                     responses['questions'].append({'question': question, 'answer': answer.content})

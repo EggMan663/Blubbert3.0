@@ -92,7 +92,7 @@ async def on_ready() -> None:
     print(f"We have logged in as {bot.user}")
 
 @bot.command(name='commands')
-async def bot_help(ctx):
+async def bot_commands(ctx):
     """
     Provide help for all the available commands.
 

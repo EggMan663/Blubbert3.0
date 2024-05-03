@@ -1,8 +1,9 @@
-# This code has been accelerated by ChatGPT
+# This code has been accelerated by ChatGPT, Microsoft Copilot, and Github Copilot.
 import discord
 import json
 import os
 import asyncio
+import random
 from discord.ext import commands
 from dotenv import load_dotenv
 from difflib import get_close_matches
@@ -90,8 +91,29 @@ async def on_ready() -> None:
     """
     print(f"We have logged in as {bot.user}")
 
+@bot.command(name='commands')
+async def bot_help(ctx):
+    """
+    Provide help for all the available commands.
 
-@bot.command(name='teach')
+    Args:
+        ctx (discord.ext.commands.Context): Context object representing the context of the command.
+
+    Returns:
+        None
+    """
+    help_message = """
+    Here are the available commands:
+    
+    - `b!teach`: Teach the bot a new response.
+    - `b!qb [author_name]`: Get a random quote from the quotebook or add a new quote.
+    - `b!qb add [author_name] [quote]`: Add a new quote to the quotebook.
+
+    Use `b![command] help` to get more information about a specific command.
+    """
+    await ctx.send(help_message)
+
+@bot.group(invoke_without_command=True, name='teach')
 async def teach(ctx) -> None:
     """
     Teach the bot a new response using the b!teach command.
@@ -110,25 +132,133 @@ async def teach(ctx) -> None:
     try:
         message = await bot.wait_for('message', timeout=60, check=check_message)
         if message.content.lower() == 'cancel':
-            await ctx.send("OK, I get it, let me know when you are ready to make me a better person.")
+            await ctx.send("Kk.")
             return
 
         question = message.content
         await ctx.send(f"Got it! What fun quirky thing should I say to '{question}'?")
         answer = await bot.wait_for('message', timeout=60, check=check_message)
         if answer.content.lower() == 'cancel':
-            await ctx.send("OK, I get it, let me know when you are ready to make me a better person.")
+            await ctx.send("Kk.")
             return
         
-        load_memory = get_function("load")
+        
         save_memory = get_function("save")
-
-        responses = load_memory("responses.json")
+        responses = get_function("load")("responses.json")
+        
         responses['questions'].append({'question': question, 'answer': answer.content})
         save_memory('responses.json', responses)
         await ctx.send("Thanks for teaching me!")
     except TimeoutError:
         await ctx.send("Sorry I got bored, start from the beginning plz.")
+
+@teach.command(name='help')
+async def teach_help(ctx) -> None:
+    """
+    Provide help for the teach command.
+
+    Args:
+        ctx (discord.ext.commands.Context): Context object representing the context of the command.
+
+    Returns:
+        None
+    """
+    help_message = """
+    The `teach` command allows you to teach the bot a new response.
+    
+    Usage: `b!teach`
+    
+    Follow the prompts to provide a question and an answer for the bot.
+    
+    Example:
+    ```
+    User: b!teach
+    Bot: What trick would you like to teach me (Type 'cancel' to cancel)
+    User: How are you?
+    Bot: Got it! What fun quirky thing should I say to 'How are you?'?
+    User: I'm doing great!
+    Bot: Thanks for teaching me!
+    ```
+    """
+    await ctx.send(help_message)
+
+@bot.group(invoke_without_command=True, name='qb') # Quotebook
+async def qb(ctx, author_name=None) -> None:
+   
+    data = get_function("load")("quotes.json")
+
+    if data['authors']:
+        if author_name:
+            # Find the author in the data
+            author = next((author for author in data['authors'] if author['name'].lower() == author_name.lower()), None)
+            if not author:
+                await ctx.send(f"No quotes available for {author_name}.")
+                return
+        else:
+            # If no author is specified, select a random author
+            author = random.choice(data['authors'])
+
+        quote = random.choice(author['quotes'])
+        await ctx.send(f"\"{quote}\" - {author['name']}")
+    else:
+        await ctx.send("No quotes available.")
+
+@qb.command(name='add')
+async def qb_add(ctx, author_name, *, quote):
+    data = get_function("load")("quotes.json")
+
+    # Find the author in the data
+    author = next((author for author in data['authors'] if author['name'].lower() == author_name.lower()), None)
+
+    if author:
+        # If the author exists, add the quote to their list of quotes
+        author['quotes'].append(quote)
+    else:
+        # If the author does not exist, create a new author with the quote
+        data['authors'].append({'name': author_name, 'quotes': [quote]})
+
+    # Write the updated data back to the file
+    get_function("save")("quotes.json", data)
+
+    await ctx.send(f"Added quote to {author_name}.")
+
+@qb.command(name='help')
+async def qb_help(ctx) -> None:
+    """
+    Provide help for the qb command.
+
+    Args:
+        ctx (discord.ext.commands.Context): Context object representing the context of the command.
+
+    Returns:
+        None
+    """
+    help_message = """
+    The `qb` command allows you to get a random quote from the quotebook or add a new quote.
+    
+    Usage: `b!qb [author_name]`
+    
+    If an `author_name` is provided, a random quote from that author will be displayed. If no `author_name` is provided, a random quote from any author will be displayed.
+    
+    Example:
+    ```
+    User: b!qb
+    Bot: "To be or not to be, that is the question." - William Shakespeare
+    User: b!qb Shakespeare
+    Bot: "All the world's a stage, and all the men and women merely players." - William Shakespeare
+    ```
+    
+    To add a new quote, use the `add` subcommand:
+    
+    Usage: `b!qb add [author_name] [quote]`
+    
+    Example:
+    ```
+    User: b!qb add Einstein E=mc^2
+    Bot: Added quote to Einstein.
+    ```
+    """
+    await ctx.send(help_message)
 
 @bot.event
 async def on_message(message) -> None:

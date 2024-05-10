@@ -4,9 +4,10 @@ import json
 import os
 import asyncio
 import random
+from difflib import get_close_matches
 from discord.ext import commands
 from dotenv import load_dotenv
-from difflib import get_close_matches
+from fuzzywuzzy import fuzz
 
 # Load environment variables
 load_dotenv()
@@ -104,17 +105,15 @@ async def bot_commands(ctx):
     """
     help_message = """
     Here are the available commands:
-    
-    - `b!teach`: Teach the bot a new response.
-    - `b!qb [author_name]`: Get a random quote from the quotebook or add a new quote.
-    - `b!qb add [author_name] [quote]`: Add a new quote to the quotebook.
+    - `b!teach`: teach blubbert new things to say
+    - `b!qb`: the handy dandy quotebook
 
     Use `b![command] help` to get more information about a specific command.
     """
     await ctx.send(help_message)
 
 @bot.group(invoke_without_command=True, name='teach')
-async def teach(ctx) -> None:
+async def teach(ctx, *, trigger) -> None:
     """
     Teach the bot a new response using the b!teach command.
 
@@ -124,7 +123,8 @@ async def teach(ctx) -> None:
     Returns:
         None
     """
-    await ctx.send("What trick would you like to teach me (Type 'cancel' to cancel)")
+
+    await ctx.send(f"What would you like me to say in response to '{trigger}'?\n\ntype 'cancel' to cancel.")
 
     def check_message(message):
         return message.author == ctx.author and message.channel == ctx.channel
@@ -134,21 +134,22 @@ async def teach(ctx) -> None:
         if message.content.lower() == 'cancel':
             await ctx.send("Kk.")
             return
-
-        question = message.content
-        await ctx.send(f"Got it! What fun quirky thing should I say to '{question}'?")
-        answer = await bot.wait_for('message', timeout=60, check=check_message)
-        if answer.content.lower() == 'cancel':
-            await ctx.send("Kk.")
-            return
         
-        
-        save_memory = get_function("save")
         responses = get_function("load")("responses.json")
         
-        responses['questions'].append({'question': question, 'answer': answer.content})
-        save_memory('responses.json', responses)
+        # Find a similar trigger in the responses
+        similar_trigger = next((response for response in responses if fuzz.ratio(response['trigger'], trigger) > 70), None)
+
+        # If a similar trigger is found, append the new response to its list
+        if similar_trigger is not None:
+            similar_trigger['responses'].append(message.content)
+        # If no similar trigger is found, create a new trigger-response pair
+        else:
+            responses.append({'trigger': trigger, 'responses': [message.content]})
+        
+        get_function("save")('responses.json', responses)
         await ctx.send("Thanks for teaching me!")
+
     except TimeoutError:
         await ctx.send("Sorry I got bored, start from the beginning plz.")
 
@@ -172,10 +173,8 @@ async def teach_help(ctx) -> None:
     
     Example:
     ```
-    User: b!teach
-    Bot: What trick would you like to teach me (Type 'cancel' to cancel)
-    User: How are you?
-    Bot: Got it! What fun quirky thing should I say to 'How are you?'?
+    User: b!teach How are you?
+    Bot: What would you like me to say in response to 'How are you?'?
     User: I'm doing great!
     Bot: Thanks for teaching me!
     ```
@@ -199,7 +198,7 @@ async def qb(ctx, author_name=None) -> None:
             author = random.choice(data['authors'])
 
         quote = random.choice(author['quotes'])
-        await ctx.send(f"\"{quote}\" - {author['name']}")
+        await ctx.send(f"\"{quote}\" - {author['name'].capitalize()}")
     else:
         await ctx.send("No quotes available.")
 
@@ -276,20 +275,20 @@ async def on_message(message) -> None:
     
     await bot.process_commands(message)
 
-    if "blubbert" in message.content.lower():
+    if "blubbert" in message.content.lower() and "b!" not in message.content.lower():
         load_memory = get_function("load")
         find_match = get_function("match")
 
         responses = load_memory("responses.json")
-        match = find_match(message.content.lower(), [q['question'].lower() for q in responses['questions']])
+        match = find_match(message.content.lower(), [q['trigger'] for q in responses])
         if match:
             collect_answer = get_function("collect")
             await message.channel.send(collect_answer(match,responses))
 
 
         else:
-            question = message.content
-            await message.channel.send("Heckin Uhhh, I don't really know what you are talking about. Would you like to teach me a new trick? (Yes/No)")
+            trigger = message.content
+            await message.channel.send("Heckin Uhhh, I don't really know what you are talking about. Would you like to show me what to say to that? (Yes/No)")
             try:
                 response = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
                 if response.content.lower() == 'yes':
@@ -298,7 +297,7 @@ async def on_message(message) -> None:
                     
                     await message.channel.send("Got it! What's the quirky thing I say or do?")
                     answer = await bot.wait_for('message', timeout=30, check=lambda m: m.author == message.author and m.channel == message.channel)
-                    responses['questions'].append({'question': question, 'answer': answer.content})
+                    responses.append({'trigger': trigger, 'responses': answer.content})
                     save_memory('responses.json', responses)
                     await message.channel.send("Thanks for teaching me!")
                 else:

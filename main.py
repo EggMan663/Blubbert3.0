@@ -13,7 +13,22 @@ from fuzzywuzzy import fuzz
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
+import json
+from difflib import get_close_matches
+
 def get_function(name):
+    """
+    Get a function based on the given name.
+
+    Args:
+        name (str): Name of the function to retrieve.
+
+    Returns:
+        function: The requested function.
+
+    Raises:
+        ValueError: If the given name is not valid.
+    """
     if name == 'load':
         def load_memory(file_path: str) -> dict:
             """
@@ -77,7 +92,7 @@ def get_function(name):
             return None  # Return None if no answer is found
         return collect_answer
     else:
-        print("Error, check function parameters.")
+        raise ValueError("Invalid function name.")
 
 # Initialize the Discord bot with command support
 intents = discord.Intents.default()
@@ -183,6 +198,19 @@ async def teach_help(ctx) -> None:
 
 @bot.group(invoke_without_command=True, name='qb') # Quotebook
 async def qb(ctx, author_name=None) -> None:
+    """
+    Retrieves a random quote from a quotebook.
+
+    Parameters:
+    - ctx: The context object representing the invocation of the command.
+    - author_name: (optional) The name of the author to retrieve quotes from. If not specified, a random author will be selected.
+
+    Returns:
+    None
+
+    Raises:
+    None
+    """
    
     data = get_function("load")("quotes.json")
 
@@ -204,6 +232,21 @@ async def qb(ctx, author_name=None) -> None:
 
 @qb.command(name='add')
 async def qb_add(ctx, author_name, *, quote):
+    """
+    Adds a quote to the list of quotes for a given author.
+
+    Parameters:
+    - ctx: The context object representing the invocation of the command.
+    - author_name: The name of the author for whom the quote is being added.
+    - quote: The quote to be added.
+
+    Returns:
+    - None
+
+    Side Effects:
+    - Modifies the 'quotes.json' file by adding the quote to the corresponding author's list of quotes.
+
+    """
     data = get_function("load")("quotes.json")
 
     # Find the author in the data
